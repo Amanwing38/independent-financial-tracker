@@ -1,0 +1,104 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         String        @default("STAFF") // "OWNER" | "STAFF"
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions          Transaction[]          @relation("RecordedTransactions")
+  transfersAuthorized   InternalTransfer[]     @relation("AuthorizedTransfers")
+  verificationSessions  VerificationSession[]  @relation("OwnerVerifications")
+  auditLogs             AuditLog[]             @relation("UserAuditLogs")
+}
+
+model AgencySettings {
+  id                 String   @id @default("default")
+  agencyName         String   @default("Independent Overseas Agency [DEMO DATA]")
+  currency           String   @default("ETB")
+  cashOpeningBalance Float    @default(5000.0)
+  bankOpeningBalance Float    @default(25000.0)
+  updatedAt          DateTime @updatedAt
+}
+
+model Transaction {
+  id                    String               @id // Formatted: TXN-CSH-YYYYMMDD-XXXX or TXN-BNK-YYYYMMDD-XXXX
+  receiptNumber         String               @unique // Formatted: RCP-YYYYMMDD-XXXX
+  type                  String               // "PAYMENT" | "TRANSFER_OUT" | "TRANSFER_IN"
+  destination           String               // "CASH" | "BANK"
+  amount                Float
+  applicantRef          String               // e.g. "APP-84920 - Demo Applicant [DEMO DATA]"
+  description           String               // e.g. "Agency processing fee deposit [DEMO DATA]"
+  depositReference      String?              // Bank deposit slip / reference if destination == BANK
+  
+  recordedById          String
+  recordedBy            User                 @relation("RecordedTransactions", fields: [recordedById], references: [id])
+  
+  verificationStatus    String               @default("PENDING") // "PENDING" | "VERIFIED" | "FLAGGED_DISCREPANCY"
+  verificationSessionId String?
+  verificationSession   VerificationSession? @relation(fields: [verificationSessionId], references: [id])
+  
+  // Link for internal cash-to-bank transfers
+  internalTransferId    String?
+  internalTransfer      InternalTransfer?    @relation(fields: [internalTransferId], references: [id])
+  
+  createdAt             DateTime             @default(now())
+}
+
+model InternalTransfer {
+  id                 String        @id // Formatted: TRF-YYYYMMDD-XXXX
+  amount             Float
+  bankReference      String        // Bank deposit slip number
+  notes              String?
+  
+  authorizedById     String
+  authorizedBy       User          @relation("AuthorizedTransfers", fields: [authorizedById], references: [id])
+  
+  transactions       Transaction[]
+  createdAt          DateTime      @default(now())
+}
+
+model VerificationSession {
+  id                 String        @id // Formatted: VER-CSH-YYYYMMDD-XXXX or VER-BNK-YYYYMMDD-XXXX
+  registerType       String        // "CASH" | "BANK"
+  periodStart        DateTime
+  periodEnd          DateTime
+  expectedAmount     Float         // Sum of unverified collections for the period
+  verifiedAmount     Float         // Physical count or confirmed bank amount entered by Owner
+  discrepancy        Float         // verifiedAmount - expectedAmount
+  hasDiscrepancy     Boolean       @default(false)
+  status             String        @default("VERIFIED") // "VERIFIED" | "FLAGGED" | "RESOLVED"
+  discrepancyReason  String?
+  resolutionNotes    String?
+  notes              String?
+  
+  verifiedById       String
+  verifiedBy         User          @relation("OwnerVerifications", fields: [verifiedById], references: [id])
+  
+  transactions       Transaction[]
+  createdAt          DateTime      @default(now())
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  action         String   // e.g. "PAYMENT_RECORDED", "INTERNAL_TRANSFER", "VERIFICATION_CLOSED", "DISCREPANCY_FLAGGED", "DISCREPANCY_RESOLVED", "STAFF_CREATED", "STAFF_STATUS_TOGGLED", "SETTINGS_UPDATED"
+  entityType     String   // "TRANSACTION", "TRANSFER", "VERIFICATION", "USER", "SETTINGS"
+  entityId       String
+  performedById  String
+  performedByName String
+  performedByRole String
+  details        String   // JSON formatted summary
+  user           User?    @relation("UserAuditLogs", fields: [performedById], references: [id])
+  createdAt      DateTime @default(now())
+}
