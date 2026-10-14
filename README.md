@@ -1,6 +1,8 @@
 # Independent Financial Tracker
 
-A standalone, secure, and independent financial management application designed specifically for overseas employment agencies and financial desks to manage cash registers, bank registers, collection verification, and internal transfers.
+A standalone, secure, and independent financial management application designed specifically for overseas employment agencies and financial desks.
+
+**Production Deployment**: Live on Vercel with PostgreSQL Storage.
 
 > **CRITICAL ARCHITECTURAL ISOLATION:**
 > This application is completely standalone and operates in its own dedicated directory. It **does NOT** import, connect to, or depend on AEMS, RMS, CV Maker, or any other existing project.
